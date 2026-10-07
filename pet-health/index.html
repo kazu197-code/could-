@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2f7d6d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="うちの子">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>うちの子ノート</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -462,6 +469,13 @@ function renderSettings() {
       <button type="button" class="btn ghost" data-act="import">⬆️ 読み込む（ファイル／貼り付け）</button>
     </div>
 
+    <h2>ホーム画面に追加</h2>
+    <div class="card stack">
+      ${installPrompt ? '<button type="button" class="btn" data-act="install">📲 アプリとしてインストール</button>'
+        : isStandalone() ? '<p style="margin:0">✅ アプリとして使っています</p>'
+        : `<p class="muted" style="margin:0;font-size:13px">iPhone：Safari の共有ボタン（□↑）→「ホーム画面に追加」<br>Android：Chrome のメニュー（︙）→「アプリをインストール」または「ホーム画面に追加」</p>`}
+    </div>
+
     <h2>表示</h2>
     <div class="card">
       <div class="seg" id="themeSeg">
@@ -647,6 +661,7 @@ document.addEventListener('click', e => {
       navigator.clipboard?.writeText(JSON.stringify(db)).then(() => toast('コピーしました'), () => toast('コピーできませんでした'));
       break;
     case 'import': formImport(); break;
+    case 'install': installPrompt.prompt(); installPrompt.userChoice.finally(() => { installPrompt = null; render(); }); break;
   }
 });
 
@@ -671,6 +686,16 @@ function applyTheme() {
 applyTheme();
 save();
 render();
+
+/* ---------- インストール ---------- */
+let installPrompt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; if (tab === 'settings') render(); });
+addEventListener('appinstalled', () => { installPrompt = null; toast('インストールしました'); });
+
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
