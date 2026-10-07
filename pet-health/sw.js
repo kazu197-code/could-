@@ -1,5 +1,5 @@
 // オフラインでも開けるようにする。ページ本体は最新を優先し、取れないときだけ保存分を使う。
-const CACHE = 'uchinoko-v1';
+const CACHE = 'uchinoko-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
