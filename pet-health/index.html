@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d6d">
+<title>うちの子ノート</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* スマホ向け1ページアプリ。下部タブで「ホーム／記録／体重／ペット／設定」を切り替える。 */
+:root {
+  --bg: #f4f1ea;
+  --surface: #fffdf8;
+  --line: #e2dccf;
+  --fg: #2b2622;
+  --muted: #7a7066;
+  --accent: #2f7d6d;
+  --accent-soft: #dcefe9;
+  --danger: #c0392b;
+  --danger-soft: #fbe1dd;
+  --warn: #a8700f;
+  --warn-soft: #fbedcc;
+  --ok-soft: #eef0ea;
+  --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --r: 14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161412; --surface: #211e1b; --line: #36312c; --fg: #efe9e2; --muted: #a79d92;
+    --accent: #5cc0a8; --accent-soft: #1f3a33; --danger: #f08072; --danger-soft: #42231f;
+    --warn: #e6b65a; --warn-soft: #3d311a; --ok-soft: #2a2724; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161412; --surface: #211e1b; --line: #36312c; --fg: #efe9e2; --muted: #a79d92;
+  --accent: #5cc0a8; --accent-soft: #1f3a33; --danger: #f08072; --danger-soft: #42231f;
+  --warn: #e6b65a; --warn-soft: #3d311a; --ok-soft: #2a2724; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; -webkit-tap-highlight-color: transparent; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(96px + env(safe-area-inset-bottom)); }
+
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 12px; }
+header.top h1 { font-family: var(--font-display); font-size: 22px; margin: 0; letter-spacing: .03em; }
+header.top .today { color: var(--muted); font-size: 13px; text-align: right; }
+
+h2 { font-family: var(--font-display); font-size: 17px; margin: 22px 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+h2 small { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 500; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.stack { display: grid; gap: 10px; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 18px 8px; font-size: 14px; }
+
+/* ペット切り替えチップ */
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; margin: 0 -2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* サマリー */
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { border-radius: var(--r); padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); }
+.stat b { display: block; font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); }
+.stat.danger { background: var(--danger-soft); border-color: transparent; }
+.stat.danger b { color: var(--danger); }
+.stat.warn { background: var(--warn-soft); border-color: transparent; }
+.stat.warn b { color: var(--warn); }
+
+/* 予定リスト */
+.due { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+.due.overdue { border-left-color: var(--danger); }
+.due.soon { border-left-color: var(--warn); }
+.due .ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--ok-soft); }
+.due.overdue .ico { background: var(--danger-soft); }
+.due.soon .ico { background: var(--warn-soft); }
+.due .t { font-weight: 700; line-height: 1.35; }
+.due .s { font-size: 12.5px; color: var(--muted); }
+.due .right { text-align: right; display: grid; gap: 4px; justify-items: end; }
+.badge { font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 2px 10px; background: var(--ok-soft); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.overdue .badge { background: var(--danger); color: #fff; }
+.soon .badge { background: var(--warn); color: #fff; }
+.mini { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 2px 10px; font-size: 12.5px; cursor: pointer; }
+.mini.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mini.del { color: var(--danger); }
+.linkbtn { background: none; border: none; color: var(--accent); font-weight: 700; cursor: pointer; padding: 4px 0; font-size: 13px; }
+
+/* ペットカード */
+.pets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pet { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: grid; gap: 2px; cursor: pointer; text-align: left; }
+.pet .face { font-size: 28px; line-height: 1; }
+.pet .name { font-family: var(--font-display); font-size: 17px; margin-top: 4px; }
+.pet .meta { font-size: 12.5px; color: var(--muted); }
+
+/* 一覧行 */
+.row { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: none; }
+.row .ico { font-size: 20px; text-align: center; }
+.row .t { font-weight: 700; line-height: 1.35; }
+.row .s { font-size: 12.5px; color: var(--muted); word-break: break-word; }
+.row .acts { display: flex; gap: 6px; }
+
+/* ボタン類 */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; background: var(--accent); color: #fff; font-weight: 700; border-radius: 12px; padding: 11px 16px; cursor: pointer; width: 100%; font-size: 15px; }
+.btn.ghost { background: var(--surface); color: var(--fg); border: 1px solid var(--line); }
+.btn.danger { background: var(--danger); }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* グラフ */
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; font-family: var(--font-body); }
+.chart .lineP { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--accent-soft); }
+.chart .dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.chart .lbl { fill: var(--fg); font-size: 11.5px; font-weight: 700; font-family: var(--font-body); }
+
+/* 下部タブ */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); z-index: 10; }
+nav.tabs .in { max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+nav.tabs button { border: none; background: none; display: grid; justify-items: center; gap: 1px; padding: 4px 0; font-size: 11px; color: var(--muted); cursor: pointer; }
+nav.tabs button .i { font-size: 20px; line-height: 1.2; filter: grayscale(1); opacity: .7; }
+nav.tabs button[aria-current="page"] { color: var(--accent); font-weight: 700; }
+nav.tabs button[aria-current="page"] .i { filter: none; opacity: 1; }
+
+/* フォーム（下から出るシート） */
+dialog { border: none; padding: 0; background: transparent; max-width: 100vw; width: 100%; margin: auto auto 0; }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.sheet { background: var(--surface); color: var(--fg); border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); max-width: 640px; margin: 0 auto; max-height: 88vh; overflow-y: auto; }
+.sheet h3 { font-family: var(--font-display); margin: 0 0 12px; font-size: 18px; }
+.field { display: grid; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 16px; }
+.field textarea { min-height: 120px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+.toast.show { opacity: 1; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>🐾 うちの子ノート</h1>
+    <div class="today" id="today"></div>
+  </header>
+  <main id="view"></main>
+</div>
+
+<nav class="tabs" aria-label="メニュー">
+  <div class="in">
+    <button data-tab="home"><span class="i">🏠</span>ホーム</button>
+    <button data-tab="records"><span class="i">📋</span>記録</button>
+    <button data-tab="weight"><span class="i">⚖️</span>体重</button>
+    <button data-tab="pets"><span class="i">🐾</span>ペット</button>
+    <button data-tab="settings"><span class="i">⚙️</span>設定</button>
+  </div>
+</nav>
+
+<dialog id="dlg"><form class="sheet" id="sheet" method="dialog"></form></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+const KEY = 'petHealthNote.v1';
+
+// 記録の種類。interval（日）を持つ種類は、最後の記録から次回予定を自動で出す。
+const TYPES = {
+  vaccine:  { label: 'ワクチン',   icon: '💉' },
+  trim:     { label: 'トリミング', icon: '✂️' },
+  hospital: { label: '通院',       icon: '🏥' },
+  medicine: { label: '投薬',       icon: '💊' },
+  other:    { label: 'その他',     icon: '📝' },
+};
+const DEFAULT_INTERVALS = { vaccine: 365, trim: 45, medicine: 30 };
+
+// 前のアプリから引き継いだ初期データ（保存データが空のときだけ使う）
+const SEED = {"pets":[{"id":"pet_1781143858905","type":"cat","name":"メロン","breed":"スコティシュ","birth":"2024-05-10","memo":"オス"},{"id":"pet_1781143879283","type":"cat","name":"ラテ","breed":"スコティシュ","birth":"2024-04-15","memo":"メス"},{"id":"pet_1781143896961","type":"cat","name":"ココ","breed":"メインクーン","birth":"2025-05-31","memo":"メス"},{"id":"pet_1781143921448","type":"cat","name":"プリン","breed":"サイベリアン","birth":"2024-06-10","memo":"メス"},{"id":"pet_1781143948058","type":"dog","name":"パル","breed":"ペキニーズ","birth":"2025-01-01","memo":"オス"},{"id":"pet_1781143979178","type":"dog","name":"モカ","breed":"ペキニーズ","birth":"2025-07-17","memo":"メス"}],"records":[{"id":"rec_1781143997429","petId":"pet_1781143979178","type":"trim","date":"2026-06-01","memo":""},{"id":"rec_1781144008333","petId":"pet_1781143979178","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781153345064","petId":"pet_1781143948058","type":"trim","date":"2026-04-08","memo":""},{"id":"rec_1781153363451","petId":"pet_1781143948058","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781153385000","petId":"pet_1781143948058","type":"other","date":"2026-06-10","memo":"フィラリア薬"},{"id":"rec_1781305490604","petId":"pet_1781143921448","type":"trim","date":"2026-05-19","memo":""},{"id":"rec_1781305546391","petId":"pet_1781143879283","type":"trim","date":"2026-06-01","memo":""},{"id":"rec_1781305592003","petId":"pet_1781143979178","type":"trim","date":"2026-06-10","memo":""},{"id":"rec_1781305617883","petId":"pet_1781143858905","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781305633517","petId":"pet_1781143879283","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781305642037","petId":"pet_1781143896961","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781305651177","petId":"pet_1781143921448","type":"vaccine","date":"2026-05-15","memo":""},{"id":"rec_1781564558460","petId":"pet_1781143896961","type":"trim","date":"2026-06-15","memo":""}]};
+
+/* ---------- データ ---------- */
+function normalize(d) {
+  d = d && typeof d === 'object' ? d : {};
+  return {
+    pets: Array.isArray(d.pets) ? d.pets : [],
+    records: Array.isArray(d.records) ? d.records : [],
+    weights: Array.isArray(d.weights) ? d.weights : [],
+    schedules: Array.isArray(d.schedules) ? d.schedules : [],
+    intervals: Object.assign({}, DEFAULT_INTERVALS, d.intervals || {}),
+  };
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return normalize(JSON.parse(raw));
+  } catch (e) {}
+  return normalize(SEED);
+}
+let db = load();
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast('保存できませんでした'); }
+}
+const uid = p => p + '_' + Date.now() + Math.floor(Math.random() * 1000);
+
+/* ---------- 日付 ---------- */
+const pad = n => String(n).padStart(2, '0');
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function dayNum(s) { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; }
+function addDays(s, n) { const t = new Date((dayNum(s) + n) * 86400000); return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`; }
+const diffDays = s => dayNum(s) - dayNum(todayStr());
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+function fmt(s) { const [y, m, d] = s.split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return `${y}/${m}/${d}（${w}）`; }
+function age(birth) {
+  if (!birth) return '';
+  const [by, bm, bd] = birth.split('-').map(Number);
+  const n = new Date();
+  let months = (n.getFullYear() - by) * 12 + (n.getMonth() + 1 - bm);
+  if (n.getDate() < bd) months--;
+  if (months < 0) return '';
+  const y = Math.floor(months / 12), m = months % 12;
+  return y ? `${y}歳${m ? m + 'ヶ月' : ''}` : `${m}ヶ月`;
+}
+
+/* ---------- ヘルパー ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const petById = id => db.pets.find(p => p.id === id);
+const petFace = p => (p && p.type === 'dog' ? '🐶' : p && p.type === 'cat' ? '🐱' : '🐾');
+const petName = id => { const p = petById(id); return p ? p.name : '（削除済み）'; };
+const typeOf = t => TYPES[t] || TYPES.other;
+const latestWeight = petId => db.weights.filter(w => w.petId === petId).sort((a, b) => b.date.localeCompare(a.date))[0];
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- 予定（手入力＋自動） ---------- */
+function upcoming(petFilter) {
+  const items = [];
+  const manualKeys = new Set();
+  for (const s of db.schedules) {
+    if (s.done) continue;
+    manualKeys.add(s.petId + ':' + s.type);
+    items.push({ id: s.id, auto: false, petId: s.petId, type: s.type, date: s.date, memo: s.memo || '' });
+  }
+  for (const p of db.pets) {
+    for (const [type, days] of Object.entries(db.intervals)) {
+      if (!(days > 0) || manualKeys.has(p.id + ':' + type)) continue;
+      const last = db.records.filter(r => r.petId === p.id && r.type === type).sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!last) continue;
+      items.push({ id: 'auto:' + p.id + ':' + type, auto: true, petId: p.id, type, date: addDays(last.date, days), memo: `前回 ${fmt(last.date)}`, lastMemo: last.memo || '' });
+    }
+  }
+  return items
+    .filter(i => !petFilter || i.petId === petFilter)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+function dueState(date) {
+  const d = diffDays(date);
+  if (d < 0) return { cls: 'overdue', text: `${-d}日超過` };
+  if (d === 0) return { cls: 'soon', text: '今日' };
+  if (d <= 3) return { cls: 'soon', text: `あと${d}日` };
+  return { cls: '', text: `あと${d}日` };
+}
+
+/* ---------- 画面 ---------- */
+let tab = 'home';
+let petFilter = '';
+let showAllDue = false;
+let typeFilter = '';
+let weightPet = '';
+
+function chipsHTML(allLabel = 'みんな') {
+  const all = `<button class="chip" data-pet="" aria-pressed="${!petFilter}">${allLabel}</button>`;
+  return `<div class="chips">${all}${db.pets.map(p => `<button class="chip" data-pet="${esc(p.id)}" aria-pressed="${petFilter === p.id}">${petFace(p)} ${esc(p.name)}</button>`).join('')}</div>`;
+}
+
+function dueItemHTML(i) {
+  const st = dueState(i.date);
+  const t = typeOf(i.type);
+  return `<div class="due ${st.cls}">
+    <div class="ico" aria-hidden="true">${t.icon}</div>
+    <div>
+      <div class="t">${esc(petName(i.petId))}・${t.label}</div>
+      <div class="s">${fmt(i.date)}${i.memo ? '　' + esc(i.memo) : ''}${i.auto ? '　<span title="前回の記録から自動計算">🔁</span>' : ''}</div>
+    </div>
+    <div class="right">
+      <span class="badge">${st.text}</span>
+      <span style="display:flex;gap:4px">
+        <button type="button" class="mini primary" data-act="done" data-id="${esc(i.id)}">済み</button>
+        ${i.auto ? '' : `<button type="button" class="mini del" data-act="delsched" data-id="${esc(i.id)}" aria-label="削除">✕</button>`}
+      </span>
+    </div>
+  </div>`;
+}
+
+function renderHome() {
+  const list = upcoming(petFilter);
+  const over = list.filter(i => diffDays(i.date) < 0).length;
+  const soon = list.filter(i => { const d = diffDays(i.date); return d >= 0 && d <= 3; }).length;
+  const month = list.filter(i => { const d = diffDays(i.date); return d >= 0 && d <= 30; }).length;
+  const near = list.filter(i => diffDays(i.date) <= 30);
+  const shown = showAllDue ? list : (near.length ? near : list.slice(0, 3));
+  const hiddenCount = list.length - shown.length;
+
+  const recent = db.records.filter(r => !petFilter || r.petId === petFilter)
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  const pets = db.pets.filter(p => !petFilter || p.id === petFilter);
+
+  return `
+    ${chipsHTML()}
+    <div class="summary" style="margin-top:6px">
+      <div class="stat ${over ? 'danger' : ''}"><b>${over}</b><span>期限切れ</span></div>
+      <div class="stat ${soon ? 'warn' : ''}"><b>${soon}</b><span>3日以内</span></div>
+      <div class="stat"><b>${month}</b><span>30日以内</span></div>
+    </div>
+
+    <h2>次の予定 <small>🔁 は前回の記録から自動計算</small></h2>
+    <div class="stack">
+      ${shown.length ? shown.map(dueItemHTML).join('') : `<div class="card empty">予定はありません。<br>下のボタンから追加できます。</div>`}
+      ${hiddenCount > 0 ? `<button type="button" class="linkbtn" data-act="showall">31日以降の予定も見る（${hiddenCount}件）</button>` : ''}
+      ${showAllDue && list.length > near.length ? `<button type="button" class="linkbtn" data-act="showall">近い予定だけにする</button>` : ''}
+      <div class="btn-row">
+        <button type="button" class="btn" data-act="addsched">＋ 予定を追加</button>
+        <button type="button" class="btn ghost" data-act="addrec">＋ 記録をつける</button>
+      </div>
+    </div>
+
+    <h2>${petFilter ? 'プロフィール' : 'うちの子たち'}</h2>
+    <div class="pets">
+      ${pets.map(p => { const w = latestWeight(p.id); return `
+        <button type="button" class="pet" data-act="editpet" data-id="${esc(p.id)}">
+          <span class="face" aria-hidden="true">${petFace(p)}</span>
+          <span class="name">${esc(p.name)}</span>
+          <span class="meta">${esc(p.breed || '')}${p.memo ? '・' + esc(p.memo) : ''}</span>
+          <span class="meta">${age(p.birth) || '年齢未登録'}${w ? `・${w.kg}kg` : ''}</span>
+        </button>`; }).join('') || '<div class="card empty">まだペットが登録されていません</div>'}
+    </div>
+
+    <h2>最近の記録 <button type="button" class="linkbtn" data-goto="records">すべて見る</button></h2>
+    <div class="card">
+      ${recent.length ? recent.map(recordRowHTML).join('') : '<div class="empty">記録はまだありません</div>'}
+    </div>`;
+}
+
+function recordRowHTML(r) {
+  const t = typeOf(r.type);
+  return `<div class="row">
+    <div class="ico" aria-hidden="true">${t.icon}</div>
+    <div><div class="t">${esc(petName(r.petId))}・${t.label}</div>
+      <div class="s">${fmt(r.date)}${r.memo ? '　' + esc(r.memo) : ''}</div></div>
+    <div class="acts"><button type="button" class="mini" data-act="editrec" data-id="${esc(r.id)}">編集</button></div>
+  </div>`;
+}
+
+function renderRecords() {
+  const list = db.records
+    .filter(r => (!petFilter || r.petId === petFilter) && (!typeFilter || r.type === typeFilter))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const typeChips = `<div class="chips"><button class="chip" data-type="" aria-pressed="${!typeFilter}">すべて</button>${
+    Object.entries(TYPES).map(([k, t]) => `<button class="chip" data-type="${k}" aria-pressed="${typeFilter === k}">${t.icon} ${t.label}</button>`).join('')}</div>`;
+  return `
+    ${chipsHTML()}
+    ${typeChips}
+    <h2>通院・投薬などの履歴 <small>${list.length}件</small></h2>
+    <div class="card">${list.length ? list.map(recordRowHTML).join('') : '<div class="empty">該当する記録はありません</div>'}</div>
+    <div style="margin-top:12px"><button type="button" class="btn" data-act="addrec">＋ 記録をつける</button></div>`;
+}
+
+function chartSVG(points) {
+  const W = 340, H = 190, L = 38, R = 14, T = 22, B = 30;
+  const xs = points.map(p => dayNum(p.date));
+  const ys = points.map(p => p.kg);
+  let minY = Math.min(...ys), maxY = Math.max(...ys);
+  const padY = Math.max((maxY - minY) * 0.2, 0.3);
+  minY = Math.max(0, minY - padY); maxY = maxY + padY;
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const sx = x => maxX === minX ? (L + (W - R)) / 2 : L + (x - minX) / (maxX - minX) * (W - L - R);
+  const sy = y => T + (1 - (y - minY) / (maxY - minY)) * (H - T - B);
+  const ticks = [0, .5, 1].map(f => minY + (maxY - minY) * f);
+  const pts = points.map(p => [sx(dayNum(p.date)), sy(p.kg)]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = pts.length > 1 ? `${line} L${pts[pts.length - 1][0].toFixed(1)} ${H - B} L${pts[0][0].toFixed(1)} ${H - B} Z` : '';
+  const md = s => { const [, m, d] = s.split('-').map(Number); return `${m}/${d}`; };
+  const last = points[points.length - 1];
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="体重の推移">
+    ${ticks.map(v => `<line class="grid" x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}"/><text class="axis" x="${L - 6}" y="${sy(v) + 4}" text-anchor="end">${v.toFixed(1)}</text>`).join('')}
+    ${area ? `<path class="area" d="${area}" opacity=".6"/>` : ''}
+    <path class="lineP" d="${line}"/>
+    ${pts.map(p => `<circle class="dot" cx="${p[0]}" cy="${p[1]}" r="4"/>`).join('')}
+    <text class="lbl" x="${pts[pts.length - 1][0]}" y="${pts[pts.length - 1][1] - 10}" text-anchor="${pts.length > 1 ? 'end' : 'middle'}">${last.kg}kg</text>
+    <text class="axis" x="${L}" y="${H - 8}">${md(points[0].date)}</text>
+    ${points.length > 1 ? `<text class="axis" x="${W - R}" y="${H - 8}" text-anchor="end">${md(last.date)}</text>` : ''}
+  </svg>`;
+}
+
+function renderWeight() {
+  if (!db.pets.length) return '<div class="card empty">先にペットを登録してください</div>';
+  if (!weightPet || !petById(weightPet)) weightPet = petFilter || db.pets[0].id;
+  const list = db.weights.filter(w => w.petId === weightPet).sort((a, b) => a.date.localeCompare(b.date));
+  const recent = list.slice(-12);
+  let diff = '';
+  if (list.length > 1) {
+    const d = +(list[list.length - 1].kg - list[list.length - 2].kg).toFixed(2);
+    diff = `前回から ${d > 0 ? '+' : ''}${d}kg`;
+  }
+  const chips = `<div class="chips">${db.pets.map(p => `<button class="chip" data-wpet="${esc(p.id)}" aria-pressed="${weightPet === p.id}">${petFace(p)} ${esc(p.name)}</button>`).join('')}</div>`;
+  return `
+    ${chips}
+    <h2>${esc(petName(weightPet))}の体重 <small>${diff}</small></h2>
+    <div class="card">${recent.length ? chartSVG(recent) : '<div class="empty">体重の記録はまだありません</div>'}</div>
+    <div style="margin-top:12px"><button type="button" class="btn" data-act="addweight">＋ 体重を記録</button></div>
+    <h2>記録一覧</h2>
+    <div class="card">${list.length ? list.slice().reverse().map(w => `
+      <div class="row"><div class="ico" aria-hidden="true">⚖️</div>
+        <div><div class="t">${w.kg} kg</div><div class="s">${fmt(w.date)}</div></div>
+        <div class="acts"><button type="button" class="mini del" data-act="delweight" data-id="${esc(w.id)}">削除</button></div>
+      </div>`).join('') : '<div class="empty">—</div>'}</div>`;
+}
+
+function renderPets() {
+  return `
+    <h2>ペット一覧 <small>${db.pets.length}匹</small></h2>
+    <div class="card">${db.pets.map(p => { const w = latestWeight(p.id); return `
+      <div class="row"><div class="ico" aria-hidden="true">${petFace(p)}</div>
+        <div><div class="t">${esc(p.name)} <span class="muted" style="font-weight:500">${esc(p.memo || '')}</span></div>
+          <div class="s">${esc(p.breed || '')}${p.birth ? `・${fmt(p.birth)}生まれ（${age(p.birth)}）` : ''}${w ? `・${w.kg}kg` : ''}</div></div>
+        <div class="acts"><button type="button" class="mini" data-act="editpet" data-id="${esc(p.id)}">編集</button></div>
+      </div>`; }).join('') || '<div class="empty">まだペットが登録されていません</div>'}</div>
+    <div style="margin-top:12px"><button type="button" class="btn" data-act="addpet">＋ ペットを追加</button></div>`;
+}
+
+function renderSettings() {
+  const iv = db.intervals;
+  return `
+    <h2>自動リマインダーの間隔</h2>
+    <div class="card">
+      <p class="muted" style="margin:0 0 10px;font-size:13px">最後に記録した日から、この日数後を「次の予定」に自動で出します。0 にすると自動表示しません。</p>
+      ${['vaccine', 'trim', 'medicine'].map(k => `
+        <div class="field"><label for="iv_${k}">${TYPES[k].icon} ${TYPES[k].label}（日ごと）</label>
+          <input id="iv_${k}" type="number" inputmode="numeric" min="0" max="999" value="${iv[k] ?? 0}" data-iv="${k}"></div>`).join('')}
+    </div>
+
+    <h2>バックアップ</h2>
+    <div class="card stack">
+      <p class="muted" style="margin:0;font-size:13px">データはこの端末のブラウザに保存されています。機種変更や別の端末で使うときは、書き出したデータを読み込んでください。前のアプリで書き出したデータもそのまま読み込めます。</p>
+      <div class="btn-row">
+        <button type="button" class="btn ghost" data-act="export">⬇️ 書き出す</button>
+        <button type="button" class="btn ghost" data-act="copy">📋 コピー</button>
+      </div>
+      <button type="button" class="btn ghost" data-act="import">⬆️ 読み込む（ファイル／貼り付け）</button>
+    </div>
+
+    <h2>表示</h2>
+    <div class="card">
+      <div class="seg" id="themeSeg">
+        ${[['', '端末に合わせる'], ['light', 'ライト'], ['dark', 'ダーク']].map(([v, l]) => `<button type="button" data-theme-val="${v}" aria-pressed="${(getTheme() || '') === v}">${l}</button>`).join('')}
+      </div>
+    </div>`;
+}
+
+function render() {
+  const v = document.getElementById('view');
+  v.innerHTML = { home: renderHome, records: renderRecords, weight: renderWeight, pets: renderPets, settings: renderSettings }[tab]();
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
+  document.getElementById('today').textContent = fmt(todayStr());
+}
+
+/* ---------- フォーム ---------- */
+const dlg = document.getElementById('dlg');
+const sheet = document.getElementById('sheet');
+
+function petOptions(sel) {
+  return db.pets.map(p => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${petFace(p)} ${esc(p.name)}</option>`).join('');
+}
+function typeOptions(sel) {
+  return Object.entries(TYPES).map(([k, t]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${t.icon} ${t.label}</option>`).join('');
+}
+function openSheet(html, onSubmit) {
+  sheet.innerHTML = html + `<div class="btn-row" style="margin-top:6px"><button type="button" class="btn ghost" data-close>キャンセル</button><button type="submit" class="btn">保存</button></div>`;
+  sheet.onsubmit = e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(sheet).entries());
+    if (onSubmit(f) !== false) { save(); dlg.close(); render(); }
+  };
+  dlg.showModal();
+}
+sheet.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) dlg.close();
+  const del = e.target.closest('[data-delete]');
+  if (del && sheet.ondelete && confirm('削除しますか？')) { sheet.ondelete(); save(); dlg.close(); render(); }
+});
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+function needPets() {
+  if (db.pets.length) return true;
+  toast('先にペットを登録してください'); tab = 'pets'; render(); return false;
+}
+
+function formSchedule() {
+  if (!needPets()) return;
+  sheet.ondelete = null;
+  openSheet(`<h3>📅 予定を追加</h3>
+    <div class="field"><label>ペット</label><select name="petId" required>${petOptions(petFilter)}</select></div>
+    <div class="field"><label>種類</label><select name="type">${typeOptions('hospital')}</select></div>
+    <div class="field"><label>日付</label><input type="date" name="date" required value="${addDays(todayStr(), 7)}"></div>
+    <div class="field"><label>メモ（病院名・薬の名前など）</label><input name="memo" maxlength="80" placeholder="例：〇〇動物病院 健康診断"></div>`,
+    f => { db.schedules.push({ id: uid('sch'), petId: f.petId, type: f.type, date: f.date, memo: f.memo.trim(), done: false }); toast('予定を追加しました'); });
+}
+
+function formRecord(rec, preset) {
+  if (!needPets()) return;
+  const r = rec || Object.assign({ petId: petFilter || db.pets[0].id, type: 'hospital', date: todayStr(), memo: '' }, preset || {});
+  sheet.ondelete = rec ? () => { db.records = db.records.filter(x => x.id !== rec.id); toast('削除しました'); } : null;
+  openSheet(`<h3>${rec ? '記録を編集' : '📋 記録をつける'}</h3>
+    <div class="field"><label>ペット</label><select name="petId" required>${petOptions(r.petId)}</select></div>
+    <div class="field"><label>種類</label><select name="type">${typeOptions(r.type)}</select></div>
+    <div class="field"><label>日付</label><input type="date" name="date" required value="${esc(r.date)}"></div>
+    <div class="field"><label>メモ（診断・薬・費用など）</label><input name="memo" maxlength="120" value="${esc(r.memo)}"></div>
+    ${rec ? '<button type="button" class="btn ghost" data-delete style="color:var(--danger);margin-bottom:8px">この記録を削除</button>' : ''}`,
+    f => {
+      const data = { petId: f.petId, type: f.type, date: f.date, memo: f.memo.trim() };
+      if (rec) Object.assign(rec, data); else db.records.push(Object.assign({ id: uid('rec') }, data));
+      toast('記録しました');
+    });
+}
+
+function formWeight() {
+  if (!needPets()) return;
+  sheet.ondelete = null;
+  const last = latestWeight(weightPet);
+  openSheet(`<h3>⚖️ 体重を記録</h3>
+    <div class="field"><label>ペット</label><select name="petId" required>${petOptions(weightPet)}</select></div>
+    <div class="field"><label>日付</label><input type="date" name="date" required value="${todayStr()}"></div>
+    <div class="field"><label>体重（kg）</label><input type="number" name="kg" inputmode="decimal" step="0.01" min="0.01" max="200" required value="${last ? last.kg : ''}"></div>`,
+    f => {
+      const kg = Math.round(parseFloat(f.kg) * 100) / 100;
+      if (!(kg > 0)) { toast('体重を入力してください'); return false; }
+      db.weights = db.weights.filter(w => !(w.petId === f.petId && w.date === f.date));
+      db.weights.push({ id: uid('w'), petId: f.petId, date: f.date, kg });
+      weightPet = f.petId; toast('記録しました');
+    });
+}
+
+function formPet(pet) {
+  const p = pet || { type: 'cat', name: '', breed: '', birth: '', memo: '' };
+  sheet.ondelete = pet ? () => {
+    db.pets = db.pets.filter(x => x.id !== pet.id);
+    db.records = db.records.filter(x => x.petId !== pet.id);
+    db.weights = db.weights.filter(x => x.petId !== pet.id);
+    db.schedules = db.schedules.filter(x => x.petId !== pet.id);
+    if (petFilter === pet.id) petFilter = '';
+    toast('削除しました');
+  } : null;
+  openSheet(`<h3>${pet ? 'ペットを編集' : '🐾 ペットを追加'}</h3>
+    <div class="field"><label>種類</label><select name="type">
+      <option value="cat" ${p.type === 'cat' ? 'selected' : ''}>🐱 ねこ</option>
+      <option value="dog" ${p.type === 'dog' ? 'selected' : ''}>🐶 いぬ</option>
+      <option value="other" ${p.type !== 'cat' && p.type !== 'dog' ? 'selected' : ''}>🐾 その他</option></select></div>
+    <div class="field"><label>名前</label><input name="name" required maxlength="20" value="${esc(p.name)}"></div>
+    <div class="field"><label>品種</label><input name="breed" maxlength="30" value="${esc(p.breed)}"></div>
+    <div class="field"><label>誕生日</label><input type="date" name="birth" value="${esc(p.birth)}"></div>
+    <div class="field"><label>メモ（性別など）</label><input name="memo" maxlength="40" value="${esc(p.memo)}"></div>
+    ${pet ? '<button type="button" class="btn ghost" data-delete style="color:var(--danger);margin-bottom:8px">このペットと記録を削除</button>' : ''}`,
+    f => {
+      const data = { type: f.type, name: f.name.trim(), breed: f.breed.trim(), birth: f.birth, memo: f.memo.trim() };
+      if (!data.name) { toast('名前を入力してください'); return false; }
+      if (pet) Object.assign(pet, data); else db.pets.push(Object.assign({ id: uid('pet') }, data));
+      toast('保存しました');
+    });
+}
+
+function formImport() {
+  sheet.ondelete = null;
+  openSheet(`<h3>⬆️ データを読み込む</h3>
+    <p class="muted" style="margin:0 0 10px;font-size:13px">今のデータは読み込んだ内容に置き換わります。</p>
+    <div class="field"><label>ファイルを選ぶ</label><input type="file" accept=".json,application/json,text/plain" id="impFile"></div>
+    <div class="field"><label>または貼り付け</label><textarea name="json" id="impText" placeholder='{"pets":[...],"records":[...]}'></textarea></div>`,
+    f => {
+      let d;
+      try { d = JSON.parse(f.json); } catch (e) { toast('データの形式が正しくありません'); return false; }
+      if (!d || !Array.isArray(d.pets)) { toast('ペットのデータが見つかりません'); return false; }
+      db = normalize(d); petFilter = ''; weightPet = '';
+      toast(`読み込みました（${db.pets.length}匹）`);
+    });
+  document.getElementById('impFile').addEventListener('change', e => {
+    const file = e.target.files[0]; if (!file) return;
+    file.text().then(t => { document.getElementById('impText').value = t; });
+  });
+}
+
+/* ---------- 操作 ---------- */
+function completeDue(id) {
+  const item = upcoming().find(i => i.id === id);
+  if (!item) return;
+  const t = typeOf(item.type);
+  if (!confirm(`${petName(item.petId)}の${t.label}を「今日済み」として記録しますか？`)) return;
+  const memo = item.auto ? item.lastMemo : item.memo;
+  db.records.push({ id: uid('rec'), petId: item.petId, type: item.type, date: todayStr(), memo });
+  if (!item.auto) { const s = db.schedules.find(x => x.id === id); if (s) s.done = true; }
+  save(); render(); toast('記録しました');
+}
+
+function exportJSON() {
+  const data = JSON.stringify(db, null, 1);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = `pet-note-${todayStr()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('button');
+  if (!el || el.closest('#sheet')) return;
+  if (el.dataset.tab) { tab = el.dataset.tab; render(); window.scrollTo(0, 0); return; }
+  if (el.dataset.goto) { tab = el.dataset.goto; render(); window.scrollTo(0, 0); return; }
+  if ('pet' in el.dataset) { petFilter = el.dataset.pet; render(); return; }
+  if ('type' in el.dataset) { typeFilter = el.dataset.type; render(); return; }
+  if (el.dataset.wpet) { weightPet = el.dataset.wpet; render(); return; }
+  if ('themeVal' in el.dataset) { setTheme(el.dataset.themeVal); render(); return; }
+  const id = el.dataset.id;
+  switch (el.dataset.act) {
+    case 'done': completeDue(id); break;
+    case 'delsched': if (confirm('この予定を削除しますか？')) { db.schedules = db.schedules.filter(s => s.id !== id); save(); render(); } break;
+    case 'showall': showAllDue = !showAllDue; render(); break;
+    case 'addsched': formSchedule(); break;
+    case 'addrec': formRecord(); break;
+    case 'editrec': formRecord(db.records.find(r => r.id === id)); break;
+    case 'addweight': formWeight(); break;
+    case 'delweight': if (confirm('この体重記録を削除しますか？')) { db.weights = db.weights.filter(w => w.id !== id); save(); render(); } break;
+    case 'addpet': formPet(); break;
+    case 'editpet': formPet(petById(id)); break;
+    case 'export': exportJSON(); break;
+    case 'copy':
+      navigator.clipboard?.writeText(JSON.stringify(db)).then(() => toast('コピーしました'), () => toast('コピーできませんでした'));
+      break;
+    case 'import': formImport(); break;
+  }
+});
+
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.iv;
+  if (!k) return;
+  const n = Math.max(0, Math.min(999, parseInt(e.target.value, 10) || 0));
+  db.intervals[k] = n; save(); toast('保存しました');
+});
+
+/* ---------- テーマ ---------- */
+function getTheme() { try { return localStorage.getItem(KEY + '.theme') || ''; } catch (e) { return ''; } }
+function setTheme(v) {
+  try { v ? localStorage.setItem(KEY + '.theme', v) : localStorage.removeItem(KEY + '.theme'); } catch (e) {}
+  applyTheme();
+}
+function applyTheme() {
+  const v = getTheme();
+  if (v) document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme');
+}
+
+applyTheme();
+save();
+render();
+</script>
+</body>
+</html>
