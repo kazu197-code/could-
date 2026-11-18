@@ -114,7 +114,8 @@
       <p class="hint">キーボードのマイクボタンで話して入力することもできます。</p>
       <div id="statusMsg"></div>
       <div id="driveBox" hidden>
-        <button class="btn secondary" id="searchBtn" type="button">ドライブから資料を探す</button>
+        <button class="btn" id="autoBtn" type="button">おまかせで作る（資料も自動で選ぶ）</button>
+        <button class="btn secondary" id="searchBtn" type="button">自分で資料を選ぶ</button>
         <div id="searchMsg"></div>
         <div id="results" hidden>
           <label for="keywords">探した言葉（変えて探し直せます）</label>
@@ -131,6 +132,7 @@
       <div class="card">
         <h2>3. 下書きの確認・手直し</h2>
         <div id="missing"></div>
+        <div id="usedDocs"></div>
         <div id="notes"></div>
         <div id="docNumberWrap" hidden>
           <label for="docNumber">文書番号</label>
@@ -258,7 +260,7 @@
     btn.disabled = on;
     btn.innerHTML = on ? `<span class="spinner"></span>${label}` : btn.dataset.label;
   };
-  ["draftBtn", "reviseBtn", "saveDocx", "saveDrive", "searchBtn", "researchBtn"].forEach((id) => { $(id).dataset.label = $(id).textContent; });
+  ["draftBtn", "reviseBtn", "saveDocx", "saveDrive", "searchBtn", "researchBtn", "autoBtn"].forEach((id) => { $(id).dataset.label = $(id).textContent; });
   const showMsg = (el, text, cls = "err") => { el.innerHTML = text ? `<div class="msg ${cls}"></div>` : ""; if (text) el.firstChild.textContent = text; };
 
   // ---- 下書き ----
@@ -298,21 +300,62 @@
     };
   }
 
-  $("draftBtn").addEventListener("click", async () => {
+  async function runDraft(btn, label) {
     const request = $("request").value.trim();
-    if (!request) return showMsg($("draftMsg"), "頼みたいことを入力してください。");
-    if (!store.get("pass")) return showSettings(true);
-    showMsg($("draftMsg"), "");
-    fillHeader();
-    busy($("draftBtn"), true, "作成中…（20秒ほど）");
+    busy(btn, true, label);
     try {
       const res = await api("/api/draft", { kind, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, baseIds: picked.base ? [picked.base] : [], refIds: picked.refs });
       lastRequest = request;
       applyDraft((await res.json()).draft);
+      renderUsed();
       $("editor").scrollIntoView({ behavior: "smooth" });
     } catch (e) { showMsg($("draftMsg"), e.message); }
-    finally { busy($("draftBtn"), false); }
+    finally { busy(btn, false); }
+  }
+  function startCheck() {
+    const request = $("request").value.trim();
+    if (!request) { showMsg($("draftMsg"), "頼みたいことを入力してください。"); return false; }
+    if (!store.get("pass")) { showSettings(true); return false; }
+    showMsg($("draftMsg"), ""); showMsg($("searchMsg"), "");
+    fillHeader();
+    return true;
+  }
+  $("draftBtn").addEventListener("click", () => { if (startCheck()) runDraft($("draftBtn"), "作成中…（20秒ほど）"); });
+  $("autoBtn").addEventListener("click", async () => {
+    if (!startCheck()) return;
+    const btn = $("autoBtn");
+    busy(btn, true, "資料を探して選んでいます…");
+    try {
+      const res = await api("/api/auto", { kind, request: $("request").value.trim(), today: $("date").value });
+      const data = await res.json();
+      $("keywords").value = (data.keywords || []).join("　");
+      files = data.files || [];
+      picked.base = data.picks.base ? data.picks.base.id : null;
+      picked.refs = (data.picks.refs || []).map((r) => r.id);
+      reasons = {};
+      if (data.picks.base) reasons[data.picks.base.id] = data.picks.base.reason;
+      (data.picks.refs || []).forEach((r) => { reasons[r.id] = r.reason; });
+      $("results").hidden = false; renderFiles();
+      if (!files.length) showMsg($("searchMsg"), "関係しそうな資料が見つからなかったので、依頼文だけで作ります。", "warn");
+    } catch (e) { busy(btn, false); return showMsg($("draftMsg"), e.message); }
+    await runDraft(btn, "下書きを作っています…（30秒ほど）");
   });
+  // 下書きに使った資料と、AIが選んだ理由
+  function renderUsed() {
+    const box = $("usedDocs"); box.innerHTML = "";
+    const used = [picked.base && ["元にした文書", picked.base], ...picked.refs.map((id) => ["参考にした資料", id])].filter(Boolean);
+    if (!used.length) return;
+    const div = document.createElement("div"); div.className = "msg info";
+    div.textContent = "使った資料（違っていたら上の一覧で選び直して「下書きを作る」）";
+    const ul = document.createElement("ul");
+    used.forEach(([role, id]) => {
+      const f = files.find((x) => x.id === id); if (!f) return;
+      const li = document.createElement("li");
+      li.textContent = `${role}：${f.name}${reasons[id] ? `（${reasons[id]}）` : ""}`;
+      ul.appendChild(li);
+    });
+    div.appendChild(ul); box.appendChild(div);
+  }
 
   $("reviseBtn").addEventListener("click", async () => {
     const revision = $("revision").value.trim();
@@ -332,6 +375,7 @@
   let driveOn = false;
   let files = [];
   const picked = { base: null, refs: [] };
+  let reasons = {};
   async function checkStatus() {
     if (!store.get("pass")) return;
     let note = "";
@@ -356,6 +400,7 @@
       li.querySelector(".name").textContent = f.name;
       li.querySelector(".meta span").textContent = `${f.folder || "マイドライブ"}・${(f.modified || "").slice(0, 10)}`;
       li.querySelector("a").href = f.url;
+      if (reasons[f.id] && (isBase || isRef)) { const r = document.createElement("div"); r.className = "meta"; r.textContent = "AIが選んだ理由：" + reasons[f.id]; li.querySelector(".meta").after(r); }
       const [bBase, bRef] = li.querySelectorAll(".pick button");
       bBase.setAttribute("aria-pressed", String(isBase)); bRef.setAttribute("aria-pressed", String(isRef));
       bBase.addEventListener("click", () => {
@@ -377,7 +422,7 @@
       const res = await api("/api/search", body);
       const data = await res.json();
       $("keywords").value = (data.keywords || []).join("　");
-      files = data.files || []; picked.base = null; picked.refs = [];
+      files = data.files || []; picked.base = null; picked.refs = []; reasons = {};
       $("results").hidden = false; renderFiles();
     } catch (e) { showMsg($("searchMsg"), e.message); }
     finally { busy(btn, false); }
