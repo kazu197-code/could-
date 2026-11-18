@@ -71,7 +71,23 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .bottom { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
     padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px); }
-  .bottom .btn { max-width: 640px; margin: 0 auto; }
+  .bottom-inner { max-width: 640px; margin: 0 auto; display: flex; gap: 8px; }
+  .bottom-inner .btn { margin-top: 0; flex: 1; padding: 13px 8px; font-size: 15px; }
+  #saveDrive:not([hidden]) + #saveDocx { background: var(--accent-soft); color: var(--text); }
+  .kw-row { display: flex; gap: 8px; align-items: center; }
+  .kw-row .add { margin-top: 0; }
+  .files { list-style: none; margin: 8px 0 0; padding: 0; }
+  .files li { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+  .files li.on { border-color: var(--accent); background: var(--accent-soft); }
+  .files .name { font-weight: 700; word-break: break-all; }
+  .files .meta { font-size: 13px; color: var(--muted); }
+  .files .meta a { color: var(--accent); }
+  .files .pick { display: flex; gap: 8px; margin-top: 8px; }
+  .files .pick button { flex: 1; font: inherit; font-size: 14px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  .files .pick button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+  .msg.info { background: var(--accent-soft); color: var(--text); }
+  .msg ul { margin: 4px 0 0; padding-left: 1.2em; }
+  .msg a { color: inherit; font-weight: 700; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -96,6 +112,16 @@
       <h2>2. 頼みたいこと</h2>
       <textarea id="request" rows="5" placeholder="例：12月の日勤調査担当会議の開催通知。12月10日（木）14時から、中央消防署3階会議室。各署の調査担当者1名が出席。資料は当日配布。"></textarea>
       <p class="hint">キーボードのマイクボタンで話して入力することもできます。</p>
+      <div id="driveBox" hidden>
+        <button class="btn secondary" id="searchBtn" type="button">ドライブから資料を探す</button>
+        <div id="searchMsg"></div>
+        <div id="results" hidden>
+          <label for="keywords">探した言葉（変えて探し直せます）</label>
+          <div class="kw-row"><input id="keywords"><button class="add" id="researchBtn" type="button">探し直す</button></div>
+          <p class="hint">使う資料を選んでください。「元にする」は1つ、「参考」は4つまで。</p>
+          <ul class="files" id="fileList"></ul>
+        </div>
+      </div>
       <button class="btn" id="draftBtn" type="button">下書きを作る</button>
       <div id="draftMsg"></div>
     </div>
@@ -104,6 +130,7 @@
       <div class="card">
         <h2>3. 下書きの確認・手直し</h2>
         <div id="missing"></div>
+        <div id="notes"></div>
         <div id="docNumberWrap" hidden>
           <label for="docNumber">文書番号</label>
           <input id="docNumber" placeholder="松消総第　　号">
@@ -115,7 +142,7 @@
         <label for="sender">発信者</label>
         <input id="sender">
         <label for="title">件名</label>
-        <input id="title">
+        <textarea id="title" rows="2" style="min-height:64px"></textarea>
         <label for="body">本文（段落ごとに改行）</label>
         <textarea id="body" rows="6"></textarea>
         <label>記（項目）</label>
@@ -166,7 +193,10 @@
 </main>
 
 <div class="bottom" id="bottomBar" hidden>
-  <button class="btn" id="saveDocx" type="button">Wordで保存（ドライブへ）</button>
+  <div class="bottom-inner">
+    <button class="btn" id="saveDrive" type="button" hidden>ドライブに保存</button>
+    <button class="btn" id="saveDocx" type="button">Wordで保存（共有メニュー）</button>
+  </div>
 </div>
 
 <script>
@@ -205,6 +235,7 @@
   $("saveSettings").addEventListener("click", () => {
     for (const [id, k] of Object.entries(settingsMap)) store.set(k, $(id).value.trim());
     showSettings(false);
+    checkStatus();
   });
   if (!store.get("pass")) showSettings(true);
 
@@ -226,7 +257,7 @@
     btn.disabled = on;
     btn.innerHTML = on ? `<span class="spinner"></span>${label}` : btn.dataset.label;
   };
-  ["draftBtn", "reviseBtn", "saveDocx"].forEach((id) => { $(id).dataset.label = $(id).textContent; });
+  ["draftBtn", "reviseBtn", "saveDocx", "saveDrive", "searchBtn", "researchBtn"].forEach((id) => { $(id).dataset.label = $(id).textContent; });
   const showMsg = (el, text, cls = "err") => { el.innerHTML = text ? `<div class="msg ${cls}"></div>` : ""; if (text) el.firstChild.textContent = text; };
 
   // ---- 下書き ----
@@ -247,12 +278,20 @@
     const miss = d.missing || [];
     $("missing").innerHTML = "";
     if (miss.length) showMsg($("missing"), "確認してください：" + miss.join("、") + "（文中の「〇〇」を書き換えてください）", "warn");
+    const notes = d.notes || [];
+    $("notes").innerHTML = "";
+    if (notes.length) {
+      const box = document.createElement("div"); box.className = "msg info";
+      box.textContent = "変えたところ・根拠にした資料"; const ul = document.createElement("ul");
+      notes.forEach((n) => { const li = document.createElement("li"); li.textContent = n; ul.appendChild(li); });
+      box.appendChild(ul); $("notes").appendChild(box);
+    }
     $("editor").hidden = false; $("bottomBar").hidden = false;
     render();
   }
   function currentDraft() {
     return {
-      title: $("title").value.trim(),
+      title: $("title").value.replace(/\s*\n\s*/g, "").trim(),
       body: $("body").value.split("\n").map((s) => s.trim()).filter(Boolean),
       items: items.map((it) => ({ heading: it.heading.trim(), lines: it.lines.split("\n").map((s) => s.trim()).filter(Boolean) })),
     };
@@ -266,7 +305,7 @@
     fillHeader();
     busy($("draftBtn"), true, "作成中…（20秒ほど）");
     try {
-      const res = await api("/api/draft", { kind, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value });
+      const res = await api("/api/draft", { kind, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, baseIds: picked.base ? [picked.base] : [], refIds: picked.refs });
       lastRequest = request;
       applyDraft((await res.json()).draft);
       $("editor").scrollIntoView({ behavior: "smooth" });
@@ -286,6 +325,66 @@
       showMsg($("reviseMsg"), "直しました。下の仕上がりイメージを確認してください。", "warn");
     } catch (e) { showMsg($("reviseMsg"), e.message); }
     finally { busy($("reviseBtn"), false); }
+  });
+
+  // ---- ドライブの資料 ----
+  let driveOn = false;
+  let files = [];
+  const picked = { base: null, refs: [] };
+  async function checkStatus() {
+    if (!store.get("pass")) return;
+    try {
+      const res = await api("/api/status", {});
+      driveOn = Boolean((await res.json()).drive);
+    } catch { driveOn = false; }
+    $("driveBox").hidden = !driveOn; $("saveDrive").hidden = !driveOn;
+  }
+  function renderFiles() {
+    const ul = $("fileList"); ul.innerHTML = "";
+    if (!files.length) { const li = document.createElement("li"); li.textContent = "見つかりませんでした。言葉を変えて探し直してください。"; ul.appendChild(li); return; }
+    files.forEach((f) => {
+      const li = document.createElement("li");
+      const isBase = picked.base === f.id, isRef = picked.refs.includes(f.id);
+      if (isBase || isRef) li.className = "on";
+      li.innerHTML = `<div class="name"></div><div class="meta"><span></span>　<a target="_blank" rel="noopener">開く</a></div><div class="pick"><button type="button" data-r="base">元にする</button><button type="button" data-r="ref">参考</button></div>`;
+      li.querySelector(".name").textContent = f.name;
+      li.querySelector(".meta span").textContent = `${f.folder || "マイドライブ"}・${(f.modified || "").slice(0, 10)}`;
+      li.querySelector("a").href = f.url;
+      const [bBase, bRef] = li.querySelectorAll(".pick button");
+      bBase.setAttribute("aria-pressed", String(isBase)); bRef.setAttribute("aria-pressed", String(isRef));
+      bBase.addEventListener("click", () => {
+        picked.base = isBase ? null : f.id; picked.refs = picked.refs.filter((x) => x !== f.id); renderFiles();
+      });
+      bRef.addEventListener("click", () => {
+        if (isRef) picked.refs = picked.refs.filter((x) => x !== f.id);
+        else if (picked.refs.length >= 4) return alert("「参考」は4つまで選べます。");
+        else { picked.refs.push(f.id); if (picked.base === f.id) picked.base = null; }
+        renderFiles();
+      });
+      ul.appendChild(li);
+    });
+  }
+  async function search(btn, body) {
+    showMsg($("searchMsg"), "");
+    busy(btn, true, "探しています…");
+    try {
+      const res = await api("/api/search", body);
+      const data = await res.json();
+      $("keywords").value = (data.keywords || []).join("　");
+      files = data.files || []; picked.base = null; picked.refs = [];
+      $("results").hidden = false; renderFiles();
+    } catch (e) { showMsg($("searchMsg"), e.message); }
+    finally { busy(btn, false); }
+  }
+  $("searchBtn").addEventListener("click", () => {
+    const request = $("request").value.trim();
+    if (!request) return showMsg($("searchMsg"), "先に頼みたいことを入力してください。");
+    search($("searchBtn"), { request });
+  });
+  $("researchBtn").addEventListener("click", () => {
+    const keywords = $("keywords").value.split(/[\s　、,]+/).filter(Boolean);
+    if (!keywords.length) return;
+    search($("researchBtn"), { keywords });
   });
 
   // ---- 記の項目 ----
@@ -340,6 +439,20 @@
   ["docNumber", "date", "recipient", "sender", "title", "body", "cOffice", "cPerson", "cExt", "closing"].forEach((id) => $(id).addEventListener("input", render));
 
   // ---- Word 保存 ----
+  const fileName = (d) => `${kind === "tsuchi" ? "通知" : "事務連絡"}（${d.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40)}）.docx`;
+  $("saveDrive").addEventListener("click", async () => {
+    const d = docData();
+    if (!d.title) return alert("件名を入力してください。");
+    busy($("saveDrive"), true, "保存中…");
+    try {
+      const res = await api("/api/save", { name: fileName(d), doc: d });
+      const saved = await res.json();
+      const el = $("reviseMsg"); el.innerHTML = `<div class="msg info">ドライブの「${saved.folder}」フォルダに保存しました。<a target="_blank" rel="noopener">ドライブで開く</a></div>`;
+      el.querySelector("a").href = saved.url;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (e) { alert(e.message); }
+    finally { busy($("saveDrive"), false); }
+  });
   $("saveDocx").addEventListener("click", async () => {
     const d = docData();
     if (!d.title) return alert("件名を入力してください。");
@@ -347,8 +460,7 @@
     try {
       const res = await api("/api/docx", d);
       const blob = await res.blob();
-      const safe = d.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40);
-      const name = `${kind === "tsuchi" ? "通知" : "事務連絡"}（${safe}）.docx`;
+      const name = fileName(d);
       const file = new File([blob], name, { type: blob.type });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try { await navigator.share({ files: [file], title: name }); return; }
@@ -362,6 +474,7 @@
 
   window.addEventListener("resize", render);
   applyKind();
+  checkStatus();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 })();
 </script>
