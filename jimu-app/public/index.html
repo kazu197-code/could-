@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>事務の分身</title>
+<meta name="theme-color" content="#1f3a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="事務の分身">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1d232b; --muted: #5f6b7a; --line: #d9dee5;
+    --accent: #1f3a5f; --accent-text: #ffffff; --accent-soft: #e6edf6; --warn: #8a5a00; --warn-bg: #fff4dc;
+    --err: #a32121; --err-bg: #fdeaea; --paper: #ffffff; --paper-text: #111;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d; --card: #1d232b; --text: #e8ecf1; --muted: #9aa6b4; --line: #333c47;
+      --accent: #7fa8d9; --accent-text: #0e1620; --accent-soft: #24313f; --warn: #f0c36a; --warn-bg: #3a2f17;
+      --err: #ff9c9c; --err-bg: #3d1f1f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "BIZ UDGothic", "BIZ UDゴシック", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-text-size-adjust: 100%; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--accent); color: var(--accent-text);
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .05em; }
+  header button { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 14px; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(env(safe-area-inset-bottom) + 96px); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 4px; }
+  input, textarea, select { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea { resize: vertical; min-height: 96px; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg button { font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+  .btn { display: block; width: 100%; font: inherit; font-weight: 700; padding: 14px; border-radius: 12px; border: 0;
+    background: var(--accent); color: var(--accent-text); margin-top: 14px; }
+  .btn.secondary { background: var(--accent-soft); color: var(--text); }
+  .btn:disabled { opacity: .55; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .date-row { grid-template-columns: 1.5fr 1fr; }
+  .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  .msg { border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: 12px; }
+  .msg.warn { background: var(--warn-bg); color: var(--warn); }
+  .msg.err { background: var(--err-bg); color: var(--err); }
+  .item { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px 10px; margin-top: 10px; }
+  .item-head { display: flex; gap: 8px; align-items: center; }
+  .item-head span { font-weight: 700; min-width: 1.5em; }
+  .item-head button, .add { font: inherit; font-size: 14px; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 8px; padding: 6px 10px; white-space: nowrap; }
+  .add { margin-top: 10px; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); font-size: 15px; }
+  .check input { width: auto; }
+  /* 紙のプレビュー（A4を縮小） */
+  .paper-wrap { overflow: hidden; border-radius: 6px; border: 1px solid var(--line); background: #cfd5dc; padding: 10px; }
+  .paper { background: var(--paper); color: var(--paper-text); width: 100%; aspect-ratio: 210 / 297; padding: 11.8% 10.1% 10.1%;
+    font-family: "BIZ UDGothic", "BIZ UDゴシック", sans-serif; font-size: 8px; line-height: 1.5; overflow: hidden; }
+  .paper p { margin: 0; min-height: 1.5em; white-space: pre-wrap; word-break: break-all; }
+  .paper .r { text-align: right; } .paper .c { text-align: center; } .paper .i1 { text-indent: 1em; }
+  .paper .contact { padding-left: 24em; white-space: nowrap; }
+  .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .bottom { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+    padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px); }
+  .bottom .btn { max-width: 640px; margin: 0 auto; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>事務の分身</h1>
+  <button id="toSettings" type="button">設定</button>
+</header>
+
+<main>
+  <!-- 作成画面 -->
+  <section id="create">
+    <div class="card">
+      <h2>1. 文書の種類</h2>
+      <div class="seg" role="group" aria-label="文書の種類">
+        <button type="button" data-kind="jimu" aria-pressed="true">事務連絡</button>
+        <button type="button" data-kind="tsuchi" aria-pressed="false">通知文</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. 頼みたいこと</h2>
+      <textarea id="request" rows="5" placeholder="例：12月の日勤調査担当会議の開催通知。12月10日（木）14時から、中央消防署3階会議室。各署の調査担当者1名が出席。資料は当日配布。"></textarea>
+      <p class="hint">キーボードのマイクボタンで話して入力することもできます。</p>
+      <button class="btn" id="draftBtn" type="button">下書きを作る</button>
+      <div id="draftMsg"></div>
+    </div>
+
+    <div id="editor" hidden>
+      <div class="card">
+        <h2>3. 下書きの確認・手直し</h2>
+        <div id="missing"></div>
+        <div id="docNumberWrap" hidden>
+          <label for="docNumber">文書番号</label>
+          <input id="docNumber" placeholder="松消総第　　号">
+        </div>
+        <div class="row date-row">
+          <div><label for="date">日付</label><input id="date"></div>
+          <div><label for="recipient">宛先</label><input id="recipient"></div>
+        </div>
+        <label for="sender">発信者</label>
+        <input id="sender">
+        <label for="title">件名</label>
+        <input id="title">
+        <label for="body">本文（段落ごとに改行）</label>
+        <textarea id="body" rows="6"></textarea>
+        <label>記（項目）</label>
+        <div id="items"></div>
+        <button class="add" id="addItem" type="button">＋ 項目を追加</button>
+        <label class="check"><input type="checkbox" id="closing"> 最後に「以上」を入れる</label>
+        <div class="row">
+          <div><label for="cOffice">事務局</label><input id="cOffice"></div>
+          <div><label for="cExt">内線</label><input id="cExt"></div>
+        </div>
+        <label for="cPerson">担当</label>
+        <input id="cPerson">
+      </div>
+
+      <div class="card">
+        <h2>4. AIに直してもらう</h2>
+        <textarea id="revision" rows="3" placeholder="例：日付を12月11日に変えて。本文をもう少し丁寧に。"></textarea>
+        <button class="btn secondary" id="reviseBtn" type="button">この内容で直す</button>
+        <div id="reviseMsg"></div>
+      </div>
+
+      <div class="card">
+        <h2>仕上がりイメージ</h2>
+        <div class="paper-wrap"><div class="paper" id="paper"></div></div>
+        <p class="hint">Wordではお手本どおり、BIZ UDゴシック 12pt・A4で作られます。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 設定画面 -->
+  <section id="settings" hidden>
+    <div class="card">
+      <h2>合言葉</h2>
+      <input id="sPass" type="password" autocomplete="current-password" placeholder="Netlify に設定した合言葉">
+      <p class="hint">この端末にだけ保存されます。</p>
+    </div>
+    <div class="card">
+      <h2>いつも使う値</h2>
+      <label for="sSender">発信者</label><input id="sSender" placeholder="例：消　防　局　長">
+      <label for="sRecipient">宛先</label><input id="sRecipient" placeholder="所　属　長">
+      <label for="sOffice">事務局</label><input id="sOffice" placeholder="例：中央消防署日勤">
+      <label for="sPerson">担当</label><input id="sPerson" placeholder="例：〇〇">
+      <label for="sExt">内線</label><input id="sExt" placeholder="例：9022">
+      <label for="sPrefix">文書番号の頭（通知文）</label><input id="sPrefix" placeholder="例：松消総第　　号">
+      <button class="btn" id="saveSettings" type="button">保存して戻る</button>
+    </div>
+  </section>
+</main>
+
+<div class="bottom" id="bottomBar" hidden>
+  <button class="btn" id="saveDocx" type="button">Wordで保存（ドライブへ）</button>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d = "") { try { return localStorage.getItem("jimu:" + k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("jimu:" + k, v); } catch {} },
+  };
+  const zen = (s) => String(s).replace(/[0-9]/g, (d) => String.fromCharCode(d.charCodeAt(0) + 0xfee0));
+  const today = () => { const d = new Date(); return `令和${zen(d.getFullYear() - 2018)}年${zen(d.getMonth() + 1)}月${zen(d.getDate())}日`; };
+
+  let kind = store.get("kind", "jimu");
+  let items = [];
+  let lastRequest = "";
+
+  // ---- 種類 ----
+  const segButtons = document.querySelectorAll(".seg button");
+  const applyKind = () => {
+    segButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
+    $("docNumberWrap").hidden = kind !== "tsuchi";
+    render();
+  };
+  segButtons.forEach((b) => b.addEventListener("click", () => { kind = b.dataset.kind; store.set("kind", kind); applyKind(); }));
+
+  // ---- 設定 ----
+  const settingsMap = { sPass: "pass", sSender: "sender", sRecipient: "recipient", sOffice: "office", sPerson: "person", sExt: "ext", sPrefix: "prefix" };
+  const showSettings = (on) => {
+    $("settings").hidden = !on; $("create").hidden = on;
+    $("bottomBar").hidden = on || $("editor").hidden;
+    $("toSettings").textContent = on ? "戻る" : "設定";
+    if (on) for (const [id, k] of Object.entries(settingsMap)) $(id).value = store.get(k, k === "recipient" ? "所　属　長" : "");
+    window.scrollTo(0, 0);
+  };
+  $("toSettings").addEventListener("click", () => showSettings($("settings").hidden));
+  $("saveSettings").addEventListener("click", () => {
+    for (const [id, k] of Object.entries(settingsMap)) store.set(k, $(id).value.trim());
+    showSettings(false);
+  });
+  if (!store.get("pass")) showSettings(true);
+
+  // ---- 通信 ----
+  async function api(path, body) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-passcode": store.get("pass") },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let msg = `エラーが起きました（${res.status}）`;
+      try { msg = (await res.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res;
+  }
+  const busy = (btn, on, label) => {
+    btn.disabled = on;
+    btn.innerHTML = on ? `<span class="spinner"></span>${label}` : btn.dataset.label;
+  };
+  ["draftBtn", "reviseBtn", "saveDocx"].forEach((id) => { $(id).dataset.label = $(id).textContent; });
+  const showMsg = (el, text, cls = "err") => { el.innerHTML = text ? `<div class="msg ${cls}"></div>` : ""; if (text) el.firstChild.textContent = text; };
+
+  // ---- 下書き ----
+  function fillHeader() {
+    $("date").value = $("date").value || today();
+    $("recipient").value = $("recipient").value || store.get("recipient", "所　属　長");
+    $("sender").value = $("sender").value || store.get("sender");
+    $("docNumber").value = $("docNumber").value || store.get("prefix");
+    $("cOffice").value = $("cOffice").value || store.get("office");
+    $("cPerson").value = $("cPerson").value || store.get("person");
+    $("cExt").value = $("cExt").value || store.get("ext");
+  }
+  function applyDraft(d) {
+    $("title").value = d.title || "";
+    $("body").value = (d.body || []).join("\n");
+    items = (d.items || []).map((it) => ({ heading: it.heading || "", lines: (it.lines || []).join("\n") }));
+    renderItems();
+    const miss = d.missing || [];
+    $("missing").innerHTML = "";
+    if (miss.length) showMsg($("missing"), "確認してください：" + miss.join("、") + "（文中の「〇〇」を書き換えてください）", "warn");
+    $("editor").hidden = false; $("bottomBar").hidden = false;
+    render();
+  }
+  function currentDraft() {
+    return {
+      title: $("title").value.trim(),
+      body: $("body").value.split("\n").map((s) => s.trim()).filter(Boolean),
+      items: items.map((it) => ({ heading: it.heading.trim(), lines: it.lines.split("\n").map((s) => s.trim()).filter(Boolean) })),
+    };
+  }
+
+  $("draftBtn").addEventListener("click", async () => {
+    const request = $("request").value.trim();
+    if (!request) return showMsg($("draftMsg"), "頼みたいことを入力してください。");
+    if (!store.get("pass")) return showSettings(true);
+    showMsg($("draftMsg"), "");
+    fillHeader();
+    busy($("draftBtn"), true, "作成中…（20秒ほど）");
+    try {
+      const res = await api("/api/draft", { kind, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value });
+      lastRequest = request;
+      applyDraft((await res.json()).draft);
+      $("editor").scrollIntoView({ behavior: "smooth" });
+    } catch (e) { showMsg($("draftMsg"), e.message); }
+    finally { busy($("draftBtn"), false); }
+  });
+
+  $("reviseBtn").addEventListener("click", async () => {
+    const revision = $("revision").value.trim();
+    if (!revision) return showMsg($("reviseMsg"), "直してほしいことを入力してください。");
+    showMsg($("reviseMsg"), "");
+    busy($("reviseBtn"), true, "直しています…");
+    try {
+      const res = await api("/api/draft", { kind, request: lastRequest || $("request").value.trim(), today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, current: currentDraft(), revision });
+      applyDraft((await res.json()).draft);
+      $("revision").value = "";
+      showMsg($("reviseMsg"), "直しました。下の仕上がりイメージを確認してください。", "warn");
+    } catch (e) { showMsg($("reviseMsg"), e.message); }
+    finally { busy($("reviseBtn"), false); }
+  });
+
+  // ---- 記の項目 ----
+  function renderItems() {
+    const box = $("items"); box.innerHTML = "";
+    items.forEach((it, i) => {
+      const el = document.createElement("div"); el.className = "item";
+      el.innerHTML = `<div class="item-head"><span>${zen(i + 1)}</span><input aria-label="見出し"><button type="button">削除</button></div><textarea rows="2" aria-label="内容" style="margin-top:8px;min-height:60px"></textarea>`;
+      const [head, del] = [el.querySelector("input"), el.querySelector("button")];
+      const ta = el.querySelector("textarea");
+      head.value = it.heading; ta.value = it.lines;
+      head.addEventListener("input", () => { it.heading = head.value; render(); });
+      ta.addEventListener("input", () => { it.lines = ta.value; render(); });
+      del.addEventListener("click", () => { items.splice(i, 1); renderItems(); render(); });
+      box.appendChild(el);
+    });
+  }
+  $("addItem").addEventListener("click", () => { items.push({ heading: "", lines: "" }); renderItems(); render(); });
+
+  // ---- 文書データとプレビュー ----
+  function docData() {
+    const d = currentDraft();
+    return {
+      kind, docNumber: $("docNumber").value.trim(), date: $("date").value.trim(),
+      recipient: $("recipient").value.trim(), sender: $("sender").value.trim(),
+      title: d.title, body: d.body, items: d.items,
+      closing: $("closing").checked ? "以上" : "",
+      contact: { office: $("cOffice").value.trim(), person: $("cPerson").value.trim(), ext: $("cExt").value.trim() },
+    };
+  }
+  function render() {
+    if ($("editor").hidden) return;
+    const d = docData(); const P = $("paper"); P.innerHTML = "";
+    // Wordと同じく1行35字になるよう文字の大きさを合わせる
+    P.style.fontSize = (P.clientWidth * 0.798 / 35) + "px";
+    const add = (text = "", cls = "") => { const p = document.createElement("p"); if (cls) p.className = cls; p.textContent = text; P.appendChild(p); };
+    add(kind === "tsuchi" && d.docNumber ? d.docNumber + "　" : "事務連絡　", "r");
+    add(d.date + "　", "r"); add();
+    add(d.recipient, "i1"); add();
+    add(d.sender + "　", "r"); add();
+    add(d.title, "c"); add();
+    d.body.forEach((t) => add(t, "i1"));
+    const its = d.items.filter((it) => it.heading || it.lines.length);
+    if (its.length) {
+      add(); add("記", "c"); add();
+      its.forEach((it, i) => { add(`${zen(i + 1)}　${it.heading}`); it.lines.forEach((l) => add(l, "i1")); add(); });
+    } else add();
+    if (d.closing) add("以上　", "r");
+    const c = d.contact; const cl = [c.office && `事務局：${c.office}`, c.person && `担　当：${c.person}`, c.ext && `内　線：${c.ext}`].filter(Boolean);
+    if (cl.length) { add(); add(); cl.forEach((l) => add(l, "contact")); }
+  }
+  ["docNumber", "date", "recipient", "sender", "title", "body", "cOffice", "cPerson", "cExt", "closing"].forEach((id) => $(id).addEventListener("input", render));
+
+  // ---- Word 保存 ----
+  $("saveDocx").addEventListener("click", async () => {
+    const d = docData();
+    if (!d.title) return alert("件名を入力してください。");
+    busy($("saveDocx"), true, "Wordを作っています…");
+    try {
+      const res = await api("/api/docx", d);
+      const blob = await res.blob();
+      const safe = d.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40);
+      const name = `${kind === "tsuchi" ? "通知" : "事務連絡"}（${safe}）.docx`;
+      const file = new File([blob], name, { type: blob.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); return; }
+        catch (e) { if (e.name === "AbortError") return; }
+      }
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (e) { alert(e.message); }
+    finally { busy($("saveDocx"), false); }
+  });
+
+  window.addEventListener("resize", render);
+  applyKind();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
