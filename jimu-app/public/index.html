@@ -41,7 +41,9 @@
   textarea { resize: vertical; min-height: 96px; }
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .seg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  .seg button { padding: 12px 4px; }
+  .seg button { padding: 12px 4px; line-height: 1.3; }
+  .seg button[data-kind] { font-size: 15px; white-space: nowrap; letter-spacing: -.02em; }
+  .seg button small { font-size: 12px; opacity: .8; font-weight: 400; }
   .seg button { font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
   .btn { display: block; width: 100%; font: inherit; font-weight: 700; padding: 14px; border-radius: 12px; border: 0;
@@ -107,6 +109,14 @@
         <button type="button" data-kind="jimu" aria-pressed="true">事務連絡</button>
         <button type="button" data-kind="tsuchi" aria-pressed="false">通知文</button>
         <button type="button" data-kind="matome" aria-pressed="false">資料まとめ</button>
+      </div>
+      <div class="matome-only" hidden>
+        <label>長さ（短いほど早くできます）</label>
+        <div class="seg pages" role="group" aria-label="長さ">
+          <button type="button" data-pages="1">A4 1枚<br><small>20〜30秒</small></button>
+          <button type="button" data-pages="2">A4 2枚<br><small>35〜45秒</small></button>
+          <button type="button" data-pages="3">A4 3枚<br><small>50〜60秒</small></button>
+        </div>
       </div>
     </div>
 
@@ -226,7 +236,12 @@
   let lastRequest = "";
 
   // ---- 種類 ----
-  const segButtons = document.querySelectorAll(".seg button");
+  const segButtons = document.querySelectorAll(".seg button[data-kind]");
+  let pages = store.get("pages", "2");
+  const pageButtons = document.querySelectorAll(".seg button[data-pages]");
+  const applyPages = () => pageButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pages === pages)));
+  pageButtons.forEach((b) => b.addEventListener("click", () => { pages = b.dataset.pages; store.set("pages", pages); applyPages(); }));
+  applyPages();
   const applyKind = () => {
     segButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
     $("docNumberWrap").hidden = kind !== "tsuchi";
@@ -361,7 +376,7 @@
     const request = $("request").value.trim();
     busy(btn, true, label);
     try {
-      const res = await api("/api/draft", { kind, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, baseIds: picked.base ? [picked.base] : [], refIds: picked.refs });
+      const res = await api("/api/draft", { kind, pages, request, today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, baseIds: picked.base ? [picked.base] : [], refIds: picked.refs });
       lastRequest = request;
       applyDraft((await res.json()).draft);
       renderUsed();
@@ -420,7 +435,7 @@
     showMsg($("reviseMsg"), "");
     busy($("reviseBtn"), true, "直しています…");
     try {
-      const res = await api("/api/draft", { kind, request: lastRequest || $("request").value.trim(), today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, current: currentDraft(), revision });
+      const res = await api("/api/draft", { kind, pages, request: lastRequest || $("request").value.trim(), today: $("date").value, sender: $("sender").value, recipient: $("recipient").value, current: currentDraft(), revision });
       applyDraft((await res.json()).draft);
       $("revision").value = "";
       showMsg($("reviseMsg"), "直しました。下の仕上がりイメージを確認してください。", "warn");
