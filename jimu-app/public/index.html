@@ -112,6 +112,7 @@
       <h2>2. 頼みたいこと</h2>
       <textarea id="request" rows="5" placeholder="例：12月の日勤調査担当会議の開催通知。12月10日（木）14時から、中央消防署3階会議室。各署の調査担当者1名が出席。資料は当日配布。"></textarea>
       <p class="hint">キーボードのマイクボタンで話して入力することもできます。</p>
+      <div id="statusMsg"></div>
       <div id="driveBox" hidden>
         <button class="btn secondary" id="searchBtn" type="button">ドライブから資料を探す</button>
         <div id="searchMsg"></div>
@@ -333,11 +334,16 @@
   const picked = { base: null, refs: [] };
   async function checkStatus() {
     if (!store.get("pass")) return;
+    let note = "";
     try {
       const res = await api("/api/status", {});
-      driveOn = Boolean((await res.json()).drive);
-    } catch { driveOn = false; }
+      const st = await res.json();
+      driveOn = Boolean(st.drive);
+      const miss = Object.entries(st.has || {}).filter(([, v]) => !v).map(([k]) => k);
+      if (miss.length) note = "Netlify に次の設定が見つかりません：" + miss.join("、") + "。Netlify の環境変数を確認してください。";
+    } catch (e) { driveOn = false; note = "接続の確認でエラー：" + e.message; }
     $("driveBox").hidden = !driveOn; $("saveDrive").hidden = !driveOn;
+    showMsg($("statusMsg"), note, "warn");
   }
   function renderFiles() {
     const ul = $("fileList"); ul.innerHTML = "";

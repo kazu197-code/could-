@@ -1,5 +1,5 @@
 // ホーム画面に追加できるようにするための最小限のサービスワーカー（画面だけをキャッシュ）
-const CACHE = "jimu-v2";
+const CACHE = "jimu-v3";
 const SHELL = ["/", "/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
