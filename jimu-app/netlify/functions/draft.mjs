@@ -1,6 +1,7 @@
 import { checkPasscode, json } from "../../lib/auth.mjs";
 import { askJson, errorResponse } from "../../lib/claude.mjs";
 import { callDrive, driveConfigured } from "../../lib/drive.mjs";
+import { streamJson, asBody } from "../../lib/stream.mjs";
 
 const SYSTEM = `あなたは松戸市消防局の職員の事務を手伝う担当者です。依頼に沿って、庁内で回覧する「事務連絡」または「通知文」の件名・本文・記書きを作ります。
 
@@ -82,15 +83,16 @@ export default async (req) => {
   const refIds = (input.refIds || []).slice(0, 4);
   if (!request && !revision) return json(400, { error: "依頼の内容を入力してください。" });
 
+  if ((baseIds.length || refIds.length) && !driveConfigured()) return json(400, { error: "ドライブ連携がまだ設定されていません。" });
+  return streamJson(async () => {
   try {
     let materials = "";
     const ids = [...baseIds, ...refIds];
     if (ids.length) {
-      if (!driveConfigured()) return json(400, { error: "ドライブ連携がまだ設定されていません。" });
       const { files } = await callDrive("read", { ids });
       for (const f of files) {
         const role = baseIds.includes(f.id) ? "元にする文書" : "参考にする資料";
-        materials += `\n\n<資料 種類="${role}" 名前="${f.name}" 更新日="${fmtDate(f.modified)}">\n${f.text}\n</資料>`;
+        materials += `\n\n<資料 種類="${role}" 名前="${f.name}" 更新日="${fmtDate(f.modified)}">\n${f.text.slice(0, 10000)}\n</資料>`;
       }
     }
 
@@ -103,11 +105,12 @@ export default async (req) => {
       user += `\n\n今の下書き（JSON）：\n${JSON.stringify(current)}\n\n直してほしいこと：\n${revision}\n\n直してほしいこと以外は、今の下書きをできるだけそのまま残してください。`;
     }
 
-    const draft = await askJson({ system: SYSTEM, user, schema: SCHEMA, effort: materials ? "medium" : "low" });
-    return json(200, { draft });
+    const draft = await askJson({ system: SYSTEM, user, schema: SCHEMA, effort: "low" });
+    return { draft };
   } catch (err) {
-    return errorResponse(err);
+    return asBody(errorResponse(err));
   }
+  });
 };
 
 export const config = { path: "/api/draft" };

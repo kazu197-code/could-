@@ -249,12 +249,19 @@
       headers: { "content-type": "application/json", "x-passcode": store.get("pass") },
       body: JSON.stringify(body),
     });
+    if (res.status === 504) throw new Error("時間がかかりすぎて止まりました。参考にする資料を減らすか、もう一度お試しください。");
     if (!res.ok) {
       let msg = `エラーが起きました（${res.status}）`;
       try { msg = (await res.json()).error || msg; } catch {}
       throw new Error(msg);
     }
-    return res;
+    if (path === "/api/docx") return res;
+    // 時間のかかる処理は、空白を送り続けたあとに JSON が届く
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text.trim()); } catch { throw new Error("返事を読み取れませんでした。もう一度お試しください。"); }
+    if (data && data.error) throw new Error(data.error);
+    return { json: async () => data };
   }
   const busy = (btn, on, label) => {
     btn.disabled = on;

@@ -1,6 +1,7 @@
 import { checkPasscode, json } from "../../lib/auth.mjs";
 import { askJson, errorResponse } from "../../lib/claude.mjs";
 import { callDrive, driveConfigured } from "../../lib/drive.mjs";
+import { streamJson, asBody } from "../../lib/stream.mjs";
 import { KEYWORD_SYSTEM, KEYWORD_SCHEMA } from "../../lib/keywords.mjs";
 
 // 「おまかせで作る」の前半：ドライブを探し、使う資料をAIが選ぶ（下書きは /api/draft で作る）
@@ -32,7 +33,7 @@ const PICK_SCHEMA = {
   },
 };
 
-const PEEK = 8; // 書き出しを読む候補の数
+const PEEK = 5; // 書き出しを読む候補の数
 const SNIPPET = 500;
 
 export default async (req) => {
@@ -51,15 +52,15 @@ export default async (req) => {
   if (!request) return json(400, { error: "頼みたいことを入力してください。" });
   const kindName = input.kind === "tsuchi" ? "通知文" : "事務連絡";
 
+  return streamJson(async () => {
   try {
-    const { keywords } = await askJson({ system: KEYWORD_SYSTEM, user: `依頼：${request}`, schema: KEYWORD_SCHEMA, maxTokens: 2000 });
-    const { files } = await callDrive("search", { keywords, limit: 15 });
-    if (!files.length) return json(200, { keywords, files, picks: { base: null, refs: [] } });
+    const keywords = (await askJson({ system: KEYWORD_SYSTEM, user: `依頼：${request}`, schema: KEYWORD_SCHEMA, maxTokens: 2000 })).keywords.slice(0, 4);
+    const { files } = await callDrive("search", { keywords, limit: 12 });
+    if (!files.length) return { keywords, files, picks: { base: null, refs: [] } };
 
     // 上位の候補の書き出しを読む（Apps Script の read は1回5件まで）
     const top = files.slice(0, PEEK).map((f) => f.id);
-    const chunks = [top.slice(0, 4), top.slice(4)].filter((c) => c.length);
-    const reads = await Promise.all(chunks.map((ids) => callDrive("read", { ids })));
+    const reads = [await callDrive("read", { ids: top })];
     const snippet = {};
     for (const r of reads) for (const f of r.files) snippet[f.id] = f.text.replace(/\s+/g, " ").slice(0, SNIPPET);
 
@@ -72,10 +73,11 @@ export default async (req) => {
     const ids = new Set(files.map((f) => f.id));
     const base = ids.has(pick.base_id) ? { id: pick.base_id, reason: pick.base_reason } : null;
     const refs = (pick.refs || []).filter((r) => ids.has(r.id) && r.id !== base?.id).slice(0, 3);
-    return json(200, { keywords, files, picks: { base, refs } });
+    return { keywords, files, picks: { base, refs } };
   } catch (err) {
-    return errorResponse(err);
+    return asBody(errorResponse(err));
   }
+  });
 };
 
 export const config = { path: "/api/auto" };

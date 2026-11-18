@@ -1,6 +1,7 @@
 import { checkPasscode, json } from "../../lib/auth.mjs";
 import { askJson, errorResponse } from "../../lib/claude.mjs";
 import { callDrive, driveConfigured } from "../../lib/drive.mjs";
+import { streamJson, asBody } from "../../lib/stream.mjs";
 import { KEYWORD_SYSTEM, KEYWORD_SCHEMA } from "../../lib/keywords.mjs";
 
 
@@ -16,17 +17,19 @@ export default async (req) => {
   } catch {
     return json(400, { error: "リクエストの形式が正しくありません。" });
   }
+  return streamJson(async () => {
   try {
     let keywords = (input.keywords || []).map((s) => String(s).trim()).filter(Boolean);
     if (!keywords.length) {
-      if (!input.request) return json(400, { error: "頼みたいことを入力してください。" });
-      keywords = (await askJson({ system: KEYWORD_SYSTEM, user: `依頼：${input.request}`, schema: KEYWORD_SCHEMA, maxTokens: 2000 })).keywords;
+      if (!input.request) return { error: "頼みたいことを入力してください。" };
+      keywords = (await askJson({ system: KEYWORD_SYSTEM, user: `依頼：${input.request}`, schema: KEYWORD_SCHEMA, maxTokens: 2000 })).keywords.slice(0, 4);
     }
     const { files } = await callDrive("search", { keywords, limit: 15 });
-    return json(200, { keywords, files });
+    return { keywords, files };
   } catch (err) {
-    return errorResponse(err);
+    return asBody(errorResponse(err));
   }
+  });
 };
 
 export const config = { path: "/api/search" };
