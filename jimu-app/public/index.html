@@ -40,7 +40,8 @@
     border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
   textarea { resize: vertical; min-height: 96px; }
   input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .seg button { padding: 12px 4px; }
   .seg button { font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
   .btn { display: block; width: 100%; font: inherit; font-weight: 700; padding: 14px; border-radius: 12px; border: 0;
@@ -105,6 +106,7 @@
       <div class="seg" role="group" aria-label="文書の種類">
         <button type="button" data-kind="jimu" aria-pressed="true">事務連絡</button>
         <button type="button" data-kind="tsuchi" aria-pressed="false">通知文</button>
+        <button type="button" data-kind="matome" aria-pressed="false">資料まとめ</button>
       </div>
     </div>
 
@@ -140,18 +142,25 @@
         </div>
         <div class="row date-row">
           <div><label for="date">日付</label><input id="date"></div>
-          <div><label for="recipient">宛先</label><input id="recipient"></div>
+          <div class="jimu-only"><label for="recipient">宛先</label><input id="recipient"></div>
         </div>
-        <label for="sender">発信者</label>
+        <label for="sender" id="senderLabel">発信者</label>
         <input id="sender">
-        <label for="title">件名</label>
+        <label for="title" id="titleLabel">件名</label>
         <textarea id="title" rows="2" style="min-height:64px"></textarea>
-        <label for="body">本文（段落ごとに改行）</label>
-        <textarea id="body" rows="6"></textarea>
-        <label>記（項目）</label>
-        <div id="items"></div>
-        <button class="add" id="addItem" type="button">＋ 項目を追加</button>
-        <label class="check"><input type="checkbox" id="closing"> 最後に「以上」を入れる</label>
+        <div class="jimu-only">
+          <label for="body">本文（段落ごとに改行）</label>
+          <textarea id="body" rows="6"></textarea>
+          <label>記（項目）</label>
+          <div id="items"></div>
+          <button class="add" id="addItem" type="button">＋ 項目を追加</button>
+          <label class="check"><input type="checkbox" id="closing"> 最後に「以上」を入れる</label>
+        </div>
+        <div class="matome-only" hidden>
+          <label for="mbody">中身</label>
+          <textarea id="mbody" rows="16" style="min-height:360px"></textarea>
+          <p class="hint">「■」で始まる行が見出し、「・」や「①」で始まる行が箇条書き、それ以外は説明の文です。【ポイント】【出典】の下も「・」で並べます。</p>
+        </div>
         <div class="row">
           <div><label for="cOffice">事務局</label><input id="cOffice"></div>
           <div><label for="cExt">内線</label><input id="cExt"></div>
@@ -221,6 +230,14 @@
   const applyKind = () => {
     segButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
     $("docNumberWrap").hidden = kind !== "tsuchi";
+    const m = kind === "matome";
+    document.querySelectorAll(".jimu-only").forEach((el) => { el.hidden = m; });
+    document.querySelectorAll(".matome-only").forEach((el) => { el.hidden = !m; });
+    $("senderLabel").textContent = m ? "作成者（空欄でも可）" : "発信者";
+    $("titleLabel").textContent = m ? "題名" : "件名";
+    $("request").placeholder = m
+      ? "例：フレックスタイム制の決まりを、新しく対象になる職員向けの研修資料にまとめて。申請の流れと注意点を中心に。"
+      : "例：12月の日勤調査担当会議の開催通知。12月10日（木）14時から、中央消防署3階会議室。各署の調査担当者1名が出席。資料は当日配布。";
     render();
   };
   segButtons.forEach((b) => b.addEventListener("click", () => { kind = b.dataset.kind; store.set("kind", kind); applyKind(); }));
@@ -274,14 +291,46 @@
   function fillHeader() {
     $("date").value = $("date").value || today();
     $("recipient").value = $("recipient").value || store.get("recipient", "所　属　長");
-    $("sender").value = $("sender").value || store.get("sender");
+    if (kind !== "matome") $("sender").value = $("sender").value || store.get("sender");
     $("docNumber").value = $("docNumber").value || store.get("prefix");
     $("cOffice").value = $("cOffice").value || store.get("office");
     $("cPerson").value = $("cPerson").value || store.get("person");
     $("cExt").value = $("cExt").value || store.get("ext");
   }
+  // 資料まとめ：画面では記号付きの文章で編集し、保存時に構造に戻す
+  function toMarkup(d) {
+    const L = [];
+    if ((d.points || []).length) { L.push("【ポイント】"); d.points.forEach((t) => L.push("・" + t)); L.push(""); }
+    (d.sections || []).forEach((sec) => {
+      L.push("■" + sec.heading);
+      (sec.blocks || []).forEach((b) => L.push(b.type === "bullet" && !/^[①-⑳]/.test(b.text) ? "・" + b.text : b.text));
+      L.push("");
+    });
+    if ((d.sources || []).length) { L.push("【出典】"); d.sources.forEach((t) => L.push("・" + t)); }
+    return L.join("\n").trim();
+  }
+  function parseMarkup(text) {
+    const out = { points: [], sections: [], sources: [] };
+    let mode = "", sec = null;
+    for (const raw of text.split("\n")) {
+      const t = raw.trim(); if (!t) continue;
+      if (/^【\s*(この資料の)?ポイント\s*】$/.test(t)) { mode = "points"; continue; }
+      if (/^【\s*出典\s*】$/.test(t)) { mode = "sources"; continue; }
+      if (/^[■◆]/.test(t)) { sec = { heading: t.replace(/^[■◆]\s*/, ""), blocks: [] }; out.sections.push(sec); mode = "sec"; continue; }
+      const item = t.replace(/^[・･\-]\s*/, "");
+      if (mode === "points") out.points.push(item);
+      else if (mode === "sources") out.sources.push(item);
+      else {
+        if (!sec) { sec = { heading: "", blocks: [] }; out.sections.push(sec); }
+        const bullet = /^[・･\-]/.test(t) || /^[①-⑳]/.test(t);
+        sec.blocks.push({ type: bullet ? "bullet" : "text", text: item });
+      }
+    }
+    return out;
+  }
   function applyDraft(d) {
     $("title").value = d.title || "";
+    if (d.sections) $("mbody").value = toMarkup(d);
     $("body").value = (d.body || []).join("\n");
     items = (d.items || []).map((it) => ({ heading: it.heading || "", lines: (it.lines || []).join("\n") }));
     renderItems();
@@ -300,6 +349,7 @@
     render();
   }
   function currentDraft() {
+    if (kind === "matome") return { title: $("title").value.replace(/\s*\n\s*/g, "").trim(), ...parseMarkup($("mbody").value) };
     return {
       title: $("title").value.replace(/\s*\n\s*/g, "").trim(),
       body: $("body").value.split("\n").map((s) => s.trim()).filter(Boolean),
@@ -465,6 +515,8 @@
   // ---- 文書データとプレビュー ----
   function docData() {
     const d = currentDraft();
+    const contact = { office: $("cOffice").value.trim(), person: $("cPerson").value.trim(), ext: $("cExt").value.trim() };
+    if (kind === "matome") return { kind, date: $("date").value.trim(), sender: $("sender").value.trim(), ...d, contact };
     return {
       kind, docNumber: $("docNumber").value.trim(), date: $("date").value.trim(),
       recipient: $("recipient").value.trim(), sender: $("sender").value.trim(),
@@ -478,7 +530,29 @@
     const d = docData(); const P = $("paper"); P.innerHTML = "";
     // Wordと同じく1行35字になるよう文字の大きさを合わせる
     P.style.fontSize = (P.clientWidth * 0.798 / 35) + "px";
-    const add = (text = "", cls = "") => { const p = document.createElement("p"); if (cls) p.className = cls; p.textContent = text; P.appendChild(p); };
+    const add = (text = "", cls = "") => { const p = document.createElement("p"); if (cls) p.className = cls; p.textContent = text; P.appendChild(p); return p; };
+    if (kind === "matome") {
+      const t = add(d.title, "c"); t.style.fontWeight = "700"; t.style.fontSize = "1.15em"; add();
+      if (d.date) add(d.date + "　", "r"); if (d.sender) add(d.sender + "　", "r"); add();
+      if (d.points.length) {
+        const box = document.createElement("div"); box.style.cssText = "border:1px solid #000;padding:.2em .4em";
+        const h = document.createElement("p"); h.textContent = "この資料のポイント"; h.style.fontWeight = "700"; box.appendChild(h);
+        d.points.forEach((x) => { const q = document.createElement("p"); q.textContent = "・" + x; q.style.cssText = "padding-left:1em;text-indent:-1em"; box.appendChild(q); });
+        P.appendChild(box); add();
+      }
+      d.sections.forEach((sec, i) => {
+        const h = add(`${zen(i + 1)}　${sec.heading}`); h.style.fontWeight = "700";
+        sec.blocks.forEach((b) => {
+          const q = b.type === "bullet" ? add((/^[①-⑳]/.test(b.text) ? "" : "・") + b.text) : add(b.text);
+          q.style.cssText = b.type === "bullet" ? "padding-left:2em;text-indent:-1em" : "padding-left:1em;text-indent:1em";
+        });
+        add();
+      });
+      if (d.sources.length) { add("【出典】"); d.sources.forEach((x) => { const q = add("・" + x); q.style.cssText = "padding-left:2em;text-indent:-1em"; }); }
+      P.style.aspectRatio = "auto"; P.style.minHeight = (P.clientWidth * 297 / 210) + "px";
+      return;
+    }
+    P.style.aspectRatio = ""; P.style.minHeight = "";
     add(kind === "tsuchi" && d.docNumber ? d.docNumber + "　" : "事務連絡　", "r");
     add(d.date + "　", "r"); add();
     add(d.recipient, "i1"); add();
@@ -494,10 +568,10 @@
     const c = d.contact; const cl = [c.office && `事務局：${c.office}`, c.person && `担　当：${c.person}`, c.ext && `内　線：${c.ext}`].filter(Boolean);
     if (cl.length) { add(); add(); cl.forEach((l) => add(l, "contact")); }
   }
-  ["docNumber", "date", "recipient", "sender", "title", "body", "cOffice", "cPerson", "cExt", "closing"].forEach((id) => $(id).addEventListener("input", render));
+  ["docNumber", "date", "recipient", "sender", "title", "body", "mbody", "cOffice", "cPerson", "cExt", "closing"].forEach((id) => $(id).addEventListener("input", render));
 
   // ---- Word 保存 ----
-  const fileName = (d) => `${kind === "tsuchi" ? "通知" : "事務連絡"}（${d.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40)}）.docx`;
+  const fileName = (d) => `${kind === "tsuchi" ? "通知" : kind === "matome" ? "資料まとめ" : "事務連絡"}（${d.title.replace(/[\\/:*?"<>|]/g, "").slice(0, 40)}）.docx`;
   $("saveDrive").addEventListener("click", async () => {
     const d = docData();
     if (!d.title) return alert("件名を入力してください。");

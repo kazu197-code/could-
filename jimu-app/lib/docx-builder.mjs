@@ -1,6 +1,6 @@
 // ドライブのお手本（01通知.docx／06 事務連絡.docx／01通知文.docx）の段落構成を再現する
 import {
-  Document, Packer, Paragraph, TextRun, AlignmentType, DocumentGridType,
+  Document, Packer, Paragraph, TextRun, AlignmentType, DocumentGridType, BorderStyle,
 } from "docx";
 
 const FONT = "BIZ UDゴシック";
@@ -8,11 +8,12 @@ const SIZE = 24; // half-points = 12pt
 const CHAR = 240; // 1字 = 12pt = 240 twips
 const mm = (v) => Math.round((v / 25.4) * 1440);
 
-const run = (text) =>
+const run = (text, opts = {}) =>
   new TextRun({
     text,
     font: { ascii: FONT, eastAsia: FONT, hAnsi: FONT, cs: FONT },
     size: SIZE,
+    ...opts,
   });
 
 const p = (text = "", opts = {}) =>
@@ -36,7 +37,51 @@ const indent1 = (text) => p(text, { indent: { firstLine: CHAR } });
  *   contact: { office: "", person: "", ext: "" },
  * }
  */
+const zenNum = (n) => String(n).replace(/[0-9]/g, (d) => String.fromCharCode(d.charCodeAt(0) + 0xfee0));
+
+// 資料まとめ（研修・説明用）：題名・ポイントの囲み・番号付きの見出し・箇条書き・出典
+function matomeChildren(data) {
+  const out = [];
+  const line = { style: BorderStyle.SINGLE, size: 6, color: "000000", space: 4 };
+  out.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [run(data.title || "", { bold: true, size: 28 })] }));
+  out.push(p());
+  if (data.date) out.push(right(data.date));
+  if (data.sender) out.push(right(data.sender));
+  out.push(p());
+
+  const points = (data.points || []).filter(Boolean);
+  if (points.length) {
+    const border = { top: line, bottom: line, left: line, right: line };
+    out.push(new Paragraph({ border, indent: { left: 120, right: 120 }, children: [run("この資料のポイント", { bold: true })] }));
+    for (const t of points) out.push(new Paragraph({ border, indent: { left: 120 + CHAR, right: 120, hanging: CHAR }, children: [run(`・${t}`)] }));
+    out.push(p());
+  }
+
+  (data.sections || []).forEach((sec, i) => {
+    out.push(new Paragraph({ children: [run(`${zenNum(i + 1)}　${sec.heading || ""}`, { bold: true })] }));
+    for (const b of sec.blocks || []) {
+      const text = String(b.text || "").replace(/^[\s　]+/, "");
+      if (!text) continue;
+      if (b.type === "bullet") {
+        const mark = /^[①-⑳]/.test(text) ? "" : "・";
+        out.push(p(mark + text, { indent: { left: CHAR * 2, hanging: CHAR } }));
+      } else {
+        out.push(p(text, { indent: { left: CHAR, firstLine: CHAR } }));
+      }
+    }
+    out.push(p());
+  });
+
+  const sources = (data.sources || []).filter(Boolean);
+  if (sources.length) {
+    out.push(p("【出典】"));
+    for (const t of sources) out.push(p(`・${t}`, { indent: { left: CHAR * 2, hanging: CHAR } }));
+  }
+  return out;
+}
+
 export function buildDocument(data) {
+  if (data.kind === "matome") return wrap(matomeChildren(data).concat(contactBlock(data)));
   const children = [];
 
   children.push(right(data.kind === "tsuchi" && data.docNumber ? data.docNumber : "事務連絡"));
@@ -74,6 +119,11 @@ export function buildDocument(data) {
     children.push(p(data.closing, { alignment: AlignmentType.RIGHT, indent: { right: CHAR } }));
   }
 
+  return wrap(children.concat(contactBlock(data)));
+}
+
+function contactBlock(data) {
+  const out = [];
   const c = data.contact || {};
   const contactLines = [
     c.office && `事務局：${c.office}`,
@@ -81,12 +131,15 @@ export function buildDocument(data) {
     c.ext && `内　線：${c.ext}`,
   ].filter(Boolean);
   if (contactLines.length) {
-    children.push(p());
-    children.push(p());
+    out.push(p());
+    out.push(p());
     // お手本では全角スペース24字分の位置から始まる
-    for (const line of contactLines) children.push(p(line, { indent: { left: CHAR * 24 } }));
+    for (const line of contactLines) out.push(p(line, { indent: { left: CHAR * 24 } }));
   }
+  return out;
+}
 
+function wrap(children) {
   return new Document({
     styles: {
       default: {
